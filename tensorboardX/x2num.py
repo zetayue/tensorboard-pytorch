@@ -1,25 +1,39 @@
 # DO NOT alter/distruct/free input object !
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 
 import numpy as np
+import six
 
 
-def makenp(x, modality=None):
-    # if already numpy, return
+def make_np(x, modality=None):
     if isinstance(x, np.ndarray):
-        if modality == 'IMG' and x.dtype == np.uint8:
-            return x.astype(np.float32) / 255.0
-        return x
+        return prepare_numpy(x, modality)
+    if isinstance(x, six.string_types):  # Caffe2 will pass name of blob(s) to fetch
+        return prepare_caffe2(x, modality)
     if np.isscalar(x):
         return np.array([x])
     if 'torch' in str(type(x)):
-        return pytorch_np(x, modality)
+        return prepare_pytorch(x, modality)
     if 'chainer' in str(type(x)):
-        return chainer_np(x, modality)
+        return prepare_chainer(x, modality)
     if 'mxnet' in str(type(x)):
-        return mxnet_np(x, modality)
+        return prepare_mxnet(x, modality)
+    raise NotImplementedError('Got {}, but expected numpy array or torch tensor.'.format(type(x)))
 
 
-def pytorch_np(x, modality):
+def prepare_numpy(x, modality):
+    if modality == 'IMG':
+        if x.dtype == np.uint8:
+            x = x.astype(np.float32) / 255.0
+        x = _prepare_image(x)
+    if modality == 'VID':
+        x = _prepare_video(x)
+    return x
+
+
+def prepare_pytorch(x, modality):
     import torch
     if isinstance(x, torch.autograd.Variable):
         x = x.data
@@ -28,27 +42,35 @@ def pytorch_np(x, modality):
         x = _prepare_image(x)
     if modality == 'VID':
         x = _prepare_video(x)
-
     return x
 
 
-def theano_np(x):
+def prepare_theano(x):
     import theano
     pass
 
 
-def caffe2_np(x):
-    pass
+def prepare_caffe2(x, modality):
+    try:
+        from caffe2.python import workspace
+    except ImportError:
+        # TODO (ml7): Remove try-except when PyTorch 1.0 merges PyTorch and Caffe2
+        # Caffe2 is not installed, disabling Caffe2 functionality
+        pass
+    x = workspace.FetchBlob(x)
+    if modality == 'IMG':
+        x = _prepare_image(x)
+    return x
 
 
-def mxnet_np(x, modality):
+def prepare_mxnet(x, modality):
     x = x.asnumpy()
     if modality == 'IMG':
         x = _prepare_image(x)
     return x
 
 
-def chainer_np(x, modality):
+def prepare_chainer(x, modality):
     import chainer
     x = chainer.cuda.to_cpu(x.data)
     if modality == 'IMG':
@@ -76,6 +98,7 @@ def make_grid(I, ncols=8):
 
 
 def _prepare_image(I):
+    # convert [N]CHW image to HWC
     assert isinstance(I, np.ndarray), 'plugin error, should pass numpy array here'
     assert I.ndim == 2 or I.ndim == 3 or I.ndim == 4
     if I.ndim == 4:  # NCHW
@@ -94,7 +117,6 @@ def _prepare_image(I):
 
 
 def _prepare_video(V):
-
     b, c, t, h, w = V.shape
 
     if V.dtype == np.uint8:
@@ -103,12 +125,13 @@ def _prepare_video(V):
     def is_power2(num):
         return num != 0 and ((num & (num - 1)) == 0)
 
-    # pad to power of 2
-    while not is_power2(V.shape[0]):
-        V = np.concatenate((V, np.zeros(shape=(1, c, t, h, w))), axis=0)
+    # pad to nearest power of 2, all at once
+    if not is_power2(V.shape[0]):
+        len_addition = int(2**V.shape[0].bit_length() - V.shape[0])
+        V = np.concatenate((V, np.zeros(shape=(len_addition, c, t, h, w))), axis=0)
 
     b = V.shape[0]
-    n_rows = 2**(int(np.log(b) / np.log(2)) // 2)
+    n_rows = 2**((b.bit_length() - 1) // 2)
     n_cols = b // n_rows
 
     V = np.reshape(V, newshape=(n_rows, n_cols, c, t, h, w))

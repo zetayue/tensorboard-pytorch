@@ -3,7 +3,7 @@ from tensorboardX import SummaryWriter
 
 def test_summary_writer_ctx():
     # after using a SummaryWriter as a ctx it should be closed
-    with SummaryWriter() as writer:
+    with SummaryWriter(filename_suffix='.test') as writer:
         writer.add_scalar('test', 1)
     assert writer.file_writer is None
 
@@ -13,7 +13,7 @@ def test_summary_writer_close():
     # OSError: [Errno 24] Too many open files
     passed = True
     try:
-        for i in range(10000):
+        for _ in range(2048):
             writer = SummaryWriter()
             writer.close()
     except OSError:

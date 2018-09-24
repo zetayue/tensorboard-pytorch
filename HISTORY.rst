@@ -1,5 +1,19 @@
 History
 =======
+1.4 (2018-08-09)
+-----------------
+* Made add_text compatible with tensorboard>1.6
+* Fix the issue of strange histogram if default binning method is used
+* Supports passing matplotlib figures to add_image()
+* Resolve namespace confliction with TF tensorboard
+* add_image_boxes function
+* Supports custom timestamp for event
+
+1.2 (2018-04-21)
+-----------------
+* Supports tensorshape information in graph visualization. Drop support for 0.3.1
+* Adds add_video function
+
 1.1 (2018-02-21)
 -----------------
 * Supports pytorch 0.3.1 (hacky)
@@ -20,9 +34,6 @@ History
 * Supports multi-scalars and JSON export
 * Multiple Embeddings in One Experiment 
 * Supports Chainer and mxnet
-
-* fixed incorrect image<->label pairing in embedding function (#12)
-* unifies API call and adds docstring. Documentation is available at: http://tensorboard-pytorch.readthedocs.io/
 
 0.7 (2017-08-22)
 -----------------
